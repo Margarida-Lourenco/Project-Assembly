@@ -3,7 +3,7 @@
 ;------------------------------------------------------------------------------
 ; Inês Paredes (ist1107028)
 ; Margarida Lourenço (ist1107137)
-; Patrí­cia Gameiro (ist1107245)
+; Patrícia Gameiro (ist1107245)
 ;
 ;==============================================================================
 ; CONSTANTES
@@ -297,18 +297,18 @@ nave:
 
 ;==============================================================================
 ; Processo
-; TECLADO
+; SONDA
 ;------------------------------------------------------------------------------
 PROCESS SP_sonda       
 
 sonda:
+    MOV  R1, [EXISTE_SONDA]
 
 ciclo_sonda:
-    MOV  R9, evento_int_sonda
-    MOV  R0, [R9]                    ; lê o LOCK  
-    MOV  R1, [EXISTE_SONDA]
+    MOV  R9, evento_int_sonda        
+    MOV  R0, [R9]                    ; lê o LOCK 
     CMP  R1, 0                       ; verifica se sonda existe
-    JZ   comandos
+    JZ   comandos                    ; se existir continua a executar comandos 
     CALL move_sonda
     JMP  ciclo_sonda
 
@@ -535,7 +535,7 @@ escreve_pixel:
 rot_int_0:
 	PUSH R1
 	MOV  R1, evento_int_asteroides
-	MOV	 [R1+0], R0	                 ; desbloqueia processo asteroide
+	MOV	 [R1], R0	                 ; desbloqueia processo asteroide
     POP  R1
 	RFE 
 
@@ -546,6 +546,6 @@ rot_int_0:
 rot_int_1:
 	PUSH R1
 	MOV  R1, evento_int_sonda
-	MOV	 [R1+0], R0	                 ; desbloqueia processo sonda
+	MOV	 [R1], R0	                 ; desbloqueia processo sonda
     POP  R1
 	RFE 
