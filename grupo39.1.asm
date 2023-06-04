@@ -194,11 +194,10 @@ comandos:
     JMP  comandos
 
 lança_sonda: 
-    PUSH R1
     MOV  R1, [EXISTE_SONDA]
     CMP  R1, 0                       ; verifica se sonda existe
     JZ   desenha_sonda               ; se não existir, desenha sonda
-    POP  R1
+    JMP  comandos
 
 ;==============================================================================
 ; DESENHA_SONDA - Desenha sonda no ecrã.
@@ -210,6 +209,7 @@ desenha_sonda:
 	MOV  R2, [SONDA_COLUNA]			; coluna da sonda
     MOV  R3, ROSA                   ; endereço da cor da sonda
     CALL escreve_pixel
+    JMP  comandos
  
 ;==============================================================================
 ; Processo
@@ -237,25 +237,25 @@ espera_tecla:
 ;==============================================================================
 ; HA_TECLA -  Espera até nenhuma tecla estar premida.
 ;------------------------------------------------------------------------------
-ha_tecla: 
-    YIELD          
+ha_tecla:       
     PUSH R0
-    MOVB [R2], R1      ; escrever no periférico de saída (linhas)
-    MOVB R0, [R3]      ; ler do periférico de entrada (colunas)
-    AND  R0, R5        ; elimina bits para além dos bits 0-3
-    CMP  R0, 0         ; verifica se alguma tecla da linha foi premida
+    MOVB [R2], R1               ; escrever no periférico de saída (linhas)
+    MOVB R0, [R3]               ; ler do periférico de entrada (colunas)
+    AND  R0, R5                 ; elimina bits para além dos bits 0-3
+    CMP  R0, 0                  ; verifica se alguma tecla da linha foi premida
     POP  R0         
-    JNZ  ha_tecla      ; se ainda houver uma tecla premida, espera até não haver
-    MOV  R7, R0        ; guarda coluna
-    MOV  R8, -1        ; inicializa contador
+    JNZ  ha_tecla               ; se ainda houver uma tecla premida, 
+                                ; espera até não haver
+    MOV  R7, R0                 ; guarda coluna
+    MOV  R8, -1                 ; inicializa contador
     CALL converte
-    MOV  R0, R8        ; guarda resultado da conversão da coluna  
-    MOV  R8, -1        ; inicializa contador
-    MOV  R7, R1        ; guarda linha
+    MOV  R0, R8                 ; guarda resultado da conversão da coluna  
+    MOV  R8, -1                 ; inicializa contador
+    MOV  R7, R1                 ; guarda linha
     CALL converte
-    SHL  R8, 2         ; multiplica linha por 4
-    ADD  R8, R0        ; soma linha e coluna
-    AND  R8, R5        ; elimina bits para além dos bits 0-3
+    SHL  R8, 2                  ; multiplica linha por 4
+    ADD  R8, R0                 ; soma linha e coluna
+    AND  R8, R5                 ; elimina bits para além dos bits 0-3
     MOV	[tecla_carregada], R8	; informa quem estiver bloqueado neste LOCK que
                                 ; uma tecla foi carregada
     JMP  espera_tecla  
@@ -326,7 +326,7 @@ move_sonda:
     JMP  sonda
 
 ;==============================================================================
-; RESET_SONDA - Atualiza posição de referência da sonda.
+; RESET_SONDA - Atualiza posição de referência da sonda para a posição inicial.
 ;------------------------------------------------------------------------------
 reset_sonda:
     MOV  R1, 26                   ; linha inicial da sonda
@@ -335,6 +335,7 @@ reset_sonda:
     MOV  [SONDA_COLUNA], R2
     MOV  R1, 0
     MOV  [EXISTE_SONDA], R1       ; sonda não existe
+    JMP  sonda
 
 ;==============================================================================
 ; Processo
