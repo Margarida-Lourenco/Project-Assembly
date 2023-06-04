@@ -3,7 +3,7 @@
 ;------------------------------------------------------------------------------
 ; Inês Paredes (ist1107028)
 ; Margarida Lourenço (ist1107137)
-; Patrícia Gameiro (ist1107245)
+; Patrí­cia Gameiro (ist1107245)
 ;
 ;==============================================================================
 ; CONSTANTES
@@ -302,15 +302,12 @@ nave:
 PROCESS SP_sonda       
 
 sonda:
-    MOV  R1, [EXISTE_SONDA]
-
-ciclo_sonda:
     MOV  R9, evento_int_sonda        
     MOV  R0, [R9]                    ; lê o LOCK 
+    MOV  R1, [EXISTE_SONDA]
     CMP  R1, 0                       ; verifica se sonda existe
-    JZ   comandos                    ; se existir continua a executar comandos 
-    CALL move_sonda
-    JMP  ciclo_sonda
+    JNZ  move_sonda                  ; se existir, move sonda
+    JMP  sonda
 
 ;==============================================================================
 ; MOVE_SONDA - Movimenta sonda no sentido ascendente. 
@@ -326,7 +323,7 @@ move_sonda:
     MOV  [SONDA_LINHA], R1			; atualiza a linha da sonda
     MOV  R3, ROSA                   ; endereço da cor da sonda
     CALL escreve_pixel
-    RET
+    JMP  sonda
 
 ;==============================================================================
 ; RESET_SONDA - Atualiza posição de referência da sonda.
