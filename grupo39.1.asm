@@ -22,9 +22,11 @@ COMANDOS         EQU 6000H	        ; endereço de base dos comandos
 DEFINE_LINHA     EQU COMANDOS + 0AH ; comando para definir a linha
 DEFINE_COLUNA    EQU COMANDOS + 0CH ; comando para definir a coluna
 DEFINE_ECRA      EQU COMANDOS + 04H ; comando para definir o ecrã
+DEFINE_CENARIO   EQU COMANDOS + 46H ; comando para definir o cenário frontal
 DEFINE_PIXEL     EQU COMANDOS + 12H ; comando para escrever um pixel
 APAGA_AVISO      EQU COMANDOS + 40H ; comando para apagar o aviso 
 APAGA_ECRÃ	     EQU COMANDOS + 02H ; comando para apagar ecrã
+APAGA_CENARIO    EQU COMANDOS + 44H ; comando para apagar o cenário frontal
 SELECIONA_FUNDO  EQU COMANDOS + 42H	; comando para selecionar um fundo
 TOCA_SOM	     EQU COMANDOS + 5AH ; comando para tocar um som
 
@@ -43,13 +45,13 @@ SONDA_CENTRAL    EQU  10         ; indíce da sonda da frente
 
 ; Painel de instrumentos
 PAINEL_LINHA     EQU  24         ; primeira linha do painel de instrumentos
-PAINEL_COLUNA    EQU  25          ; primeira coluna do painel de instrumentos
+PAINEL_COLUNA    EQU  25         ; primeira coluna do painel de instrumentos
 PAINEL_LARGURA	 EQU  15	     ; largura do painel de instrumentos
 PAINEL_ALTURA	 EQU  8 	     ; altura do painel de instrumentos
 
 ; Luzes
 LUZES_LINHA      EQU  28         ; primeira linha das luzes
-LUZES_ALTURA     EQU  1         ; altura das luzes
+LUZES_ALTURA     EQU  1          ; altura das luzes
 
 ; Comandos
 TECLA_0          EQU 	00H      ; tecla 0, move sonda para a esquerda
@@ -58,6 +60,11 @@ TECLA_2          EQU 	02H      ; tecla 2, move sonda para a direita
 TECLA_C			 EQU 	0CH		 ; tecla C, inicia o jogo
 TECLA_D			 EQU 	0DH      ; tecla D, pausa o jogo
 TECLA_E			 EQU 	0EH		 ; tecla E, termina o jogo
+
+; Modos de jogo
+PAUSA      EQU  0          ; jogo parado
+JOGAVEL    EQU  1          ; jogo a decorrer
+REINICIAR  EQU  2          ; jogo a reiniciar
 
 ; Cores		
 AMARELO             EQU  0FFA2H
@@ -110,7 +117,10 @@ SP_inicial:
 ;==============================================================================
 ; VARIÁVEIS
 ;------------------------------------------------------------------------------
-ENERGIA:         WORD 100     ; energia da nave
+ENERGIA:      WORD 100  ; energia da nave 
+
+MODO_JOGO:    WORD 0    ; indica modo do jogo
+                        ; 0 - pausa,  1 - jogo a decorrer, 2 - jogo a reiniciar
 
 ; Asteróides
 TAB_ASTEROIDE:  ; tabela que define os 4 asteróides
@@ -158,8 +168,6 @@ PAR_COLUNA_DIRECAO:       ; tabela que define as combinções aleatórias
     WORD 30, 1, 0, -1, -1     ; asteróide ao centro que se move na diag direita
     WORD 59, -1, 0, 22, 38    ; asteróide à direita
 
-COLISAO_NAVE:  WORD 0
-
 ; Sonda
 TAB_SONDA:      ; tabela que define a sonda
                 ; estado, linha, coluna, direção, limite
@@ -167,7 +175,12 @@ TAB_SONDA:      ; tabela que define a sonda
     WORD 0, 23, 32, 0, 11        ; sonda 2 (sonda central)
     WORD 0, 24, 39, 1, 12        ; sonda 3 (sonda direita)
 
-EXISTE_SONDA:      WORD 0        ; zero indica que sonda não foi disparada
+TAB_SONDA_REF:      ; tabela que guarda valores de referência para as sondas
+                    ; estado, linha, coluna
+    WORD 0, 24, 25          ; sonda 1 (sonda esquerda)
+    WORD 0, 23, 32          ; sonda 2 (sonda central)
+    WORD 0, 24, 39          ; sonda 3 (sonda direita)
+
 SONDA_LINHA:       WORD 23                    
 SONDA_COLUNA:      WORD 32
 COLISAO_SONDA:     WORD 0        ; 0 - não colidiu, 1 - colidiu
@@ -223,6 +236,8 @@ PLACE 0
 ; BEYOND_MARS - Inicializa jogo.
 ;------------------------------------------------------------------------------
 inicio:
+    MOV  R1, JOGAVEL
+    MOV  [MODO_JOGO], R1         ; inicializa MODO_JOGO a jogável
     MOV  [APAGA_AVISO], R1             
     MOV  [APAGA_ECRÃ], R1	        
     MOV  R1, 1                   
@@ -281,11 +296,15 @@ comandos:
                                  ; verifica se a tecla premida corresponde
     CMP  R8, TECLA_2             ; ao comando  que dispara sonda da direita
     JZ   dispara_sonda
-    ;CMP  R8, TECLA_D            ; verifica se a tecla premida corresponde
-    ;JZ beyond_mars              ; ao comando  que coloca o jogo em pausa
+    
+    MOV  R9, TECLA_D             ; verifica se a tecla premida corresponde
+    CMP  R8, R9            
+    JZ   pausado                 ; ao comando  que coloca o jogo em pausa
+
     MOV  R9, TECLA_E
     CMP  R8, R9                  ; verifica se a tecla premida corresponde
-    ;JZ fim_jogo                 ; ao comando  que termina o jogo
+    MOV  R2, 3                   ; seleciona fundo número 3
+    JZ fim_jogo                  ; ao comando  que termina o jogo
     JMP  comandos
 
 dispara_sonda: 
@@ -313,7 +332,135 @@ desenha_sonda:
     MOV  [ENERGIA], R1              ; guarda energia
     MOV  [lock_display], R1         ; desbloqueia LOCK do display
     JMP  comandos
-     
+
+controlo:
+    YIELD
+    MOV R1, [MODO_JOGO]        
+    CMP R1, JOGAVEL               ; verifica se o jogo está parado
+    JNZ controlo
+    RET 
+
+;==============================================================================
+; FIM_JOGO - Termina o jogo.
+;------------------------------------------------------------------------------
+fim_jogo:
+    MOV  R1, REINICIAR                   
+    MOV [MODO_JOGO], R1
+    MOV [APAGA_AVISO], R1
+    MOV [APAGA_ECRÃ], R1
+    MOV R1, 3
+    MOV [SELECIONA_FUNDO], R2   
+    DI0
+    DI1
+    DI2
+    DI3
+    DI                             ; desativa interrupções (geral)
+    MOV R9, 0                      ; inicializa o valor a colocar na tabela
+    MOV R5, 5                      ; número de ciclos
+    MOV R2, 4                      ; inicializa o índice da tabela
+    CALL apaga_estado_ger_aleatorio
+    MOV R4, N_SONDAS
+    JMP apaga_entradas_sonda
+    
+recomeca:
+    YIELD
+    MOV R8, [tecla_carregada]  ; bloqueia neste LOCK até uma tecla ser carregada
+    MOV R9, TECLA_E            ; verifica se a tecla premida 
+    CMP R8, R9                 ;  corresponde à tecla D
+    JNZ  recomeca
+
+ecra_inicio:
+    MOV  [APAGA_AVISO], R1
+    MOV  [APAGA_ECRÃ], R1
+    MOV R1, 1
+    MOV [SELECIONA_FUNDO], R1
+
+do_zero:
+    YIELD
+    MOV R8, [tecla_carregada]      ; bloqueia neste LOCK até uma tecla ser 
+                                   ; carregada
+    MOV R9, TECLA_C                ; verifica se a tecla premida corresponde a tecla C
+    CMP R8, R9
+    JZ  restart
+    JMP do_zero  
+
+pausado:
+    MOV R1, PAUSA                   
+    MOV [MODO_JOGO], R1
+    MOV R1, 1
+    MOV [DEFINE_ECRA], R1
+    MOV R1, 2          
+    MOV [DEFINE_CENARIO], R1             
+    DI0
+    DI1
+    DI2
+    DI3
+    DI                             ; desativa interrupções (geral)
+
+pausa:                              
+    YIELD
+    MOV R8, [tecla_carregada]      ; bloqueia até uma tecla ser carregada
+    MOV R9, TECLA_D                ; verifica se a tecla premida 
+    CMP R8, R9                     ; corresponde à  tecla D
+    JZ  restart
+    MOV R9, TECLA_E               ; verifica se a tecla premida
+    CMP R8, R9                    ; corresponde à  tecla E
+    MOV  R2, 3                    ; seleciona fundo número 3
+    JZ  fim_jogo
+    JMP pausa
+
+apaga_estado_ger_aleatorio:
+    MOV R1, PAR_COLUNA_DIRECAO
+    MOV [R1+R2], R9           ; reinicializa estado do asteróide no gerador
+    MOV R3, 10
+    ADD R2, R3                ; índice do próximo estado na tabela
+    SUB R5, 1                 ; decrementa o contador de estados
+    CMP R5, 0
+    JNZ apaga_estado_ger_aleatorio
+    RET
+
+apaga_entradas_sonda:
+    PUSH R5
+    PUSH R7
+    SUB  R4, 1                 ; decrementa o contador de sondas
+    MOV  R1, TAB_SONDA
+    MOV  R5, TAB_SONDA_REF
+    MOV  R2, 10
+    MUL  R2, R4                ; calcula o índice da sonda a reinicializar
+    MOV  R6, 6
+    MUL  R6, R4                ; calcula o índice da referência da sonda
+    MOV  R7, [R5+R6]           ; valor da tipo ref da sonda
+    MOV  [R1+R2], R7           ; reinicializa o tipo da sonda
+    ADD  R2, 2                 ; calcula o índice da linha da sonda
+    ADD  R6, 2                 ; calcula o índice da ref da linha da sonda
+    MOV  R7, [R5+R6]           ; valor da linha ref da sonda
+    MOV  [R1+R2], R7           ; reinicializa a linha da sonda
+    ADD  R2, 2                 ; calcula o índice da coluna da sonda
+    ADD  R6, 2                 ; calcula o índice da ref da coluna da sonda
+    MOV  R7, [R5+R6]           ; valor da coluna ref da sonda
+    MOV  [R1+R2], R7           ; reinicializa a coluna da sonda
+    POP  R7
+    POP  R5
+    CMP  R4, 0                 ; verifica se já reinicializou todas as sondas
+    JNZ  apaga_entradas_sonda
+    JMP  recomeca
+    
+restart:
+    MOV R1, 1
+    MOV [APAGA_CENARIO], R1 
+    MOV R1, 100
+    MOV [ENERGIA], R1
+	MOV	 R1, 0			         ; cenário de fundo número 0
+    MOV  [SELECIONA_FUNDO], R1	 
+    EI0					         ; permite interrupção 0
+    EI1                          ; permite interrupção 1
+    EI2                          ; permite interrupção 2
+    EI3                          ; permite interrupção 3
+	EI	
+    MOV  R1, JOGAVEL
+    MOV  [MODO_JOGO], R1         ; inicializa MODO_JOGO a jogável
+    JMP comandos
+      
 ;==============================================================================
 ; Processo
 ; TECLADO
@@ -407,6 +554,7 @@ nave:
     CALL desenha_objeto
     CALL desenha_nave_inferior
     MOV  R0, [evento_int_nave]    ; lê o LOCK 
+    CALL controlo
     JMP nave
 
 desenha_nave_superior:
@@ -433,7 +581,7 @@ desenha_nave_inferior:
     ADD R4, R0                   ; endereço do painel de instrumentos inferior
     CALL desenha_objeto
     RET
-    
+
 ; Process
 ; DISPLAY - Atualiza o display que mostra a energia da nave.
 
@@ -450,7 +598,13 @@ display:
     MOV  R10, 10          
     CALL converte_decimal
     MOV  [DISPLAYS], R1           ; escreve no periférico dos displays
+    CMP  R1, 0                    ; verifica se energia é zero
+    JZ   gameover_energia
     JMP display
+
+gameover_energia: 
+    MOV R2, 4                  ; seleciona fundo número 4       
+    JMP fim_jogo
 
 ;==============================================================================
 ; CONVERTE_DECIMAL - Converte o valor da energia de hexadecimal para decimal.
@@ -480,12 +634,23 @@ energia:
     MOV  [lock_display], R1       ; desbloqueia display para energia inicial
 
 ciclo_energia:
-    MOV  R1, [evento_int_energia] ; lê o LOCK 
+    MOV  R1, [evento_int_energia] ; lê o LOCK
+    MOV  R1, [MODO_JOGO]          ; lê o modo de jogo
+    CMP  R1, REINICIAR            ; verifica se jogo está a ser reiniciado
+    JZ   reinicia_energia          
+    CALL controlo
     MOV  R1, [ENERGIA]
     SUB  R1, 3                    ; decrementa energia em 3
     MOV  [ENERGIA], R1            ; guarda energia
     MOV  [lock_display], R1       ; desbloqueia display
     JMP  ciclo_energia
+
+reinicia_energia:
+    YIELD
+    MOV R1, [MODO_JOGO]          ; lê o modo de jogo
+    CMP R1, JOGAVEL              ; verifica se jogo está a decorrer de novo
+    JZ  energia     ;            ; se sim, reinicia o processo energia
+    JMP reinicia_energia
 
 ; Processo
 ; SONDA
@@ -509,14 +674,27 @@ ciclo_sonda:
     MOV  [COLISAO_SONDA], R1         ; reinicia colisão
     JZ   sonda_colidiu               ; se houve, reinicia sonda
     MOV  R0, [evento_int_sonda]      ; lê o LOCK 
+    MOV  R1, [MODO_JOGO]             ; lê o modo de jogo
+    CMP  R1, REINICIAR               ; verifica se jogo está a ser reiniciado
+    JZ   reinicia_sonda
     MOV  R3, [R8]                    ; copia estado da sonda
     CMP  R3, 0                       ; verifica se sonda existe
     JNZ  move_sonda                  ; se existir, move sonda
     JMP  ciclo_sonda
 
+reinicia_sonda:
+    YIELD
+    MOV  R1, 0
+    MOV [COLISAO_SONDA], R1      ; reinicia estado das colisões
+    MOV R1, [MODO_JOGO]          ; lê o modo de jogo
+    CMP R1, JOGAVEL              ; verifica se jogo está a decorrer de novo
+    JZ  ciclo_sonda              ; se sim, reinicia o processo sonda
+    JMP reinicia_sonda
+
 ; MOVE_SONDA - Movimenta sonda no sentido ascendente. 
 
 move_sonda:
+    CALL controlo
     MOV  R9, 2                      ; inicializa índice da tabela
     MOV  R1, [R8+R9]                ; acede à linha da sonda
     ADD  R9, 2                      ; atualiza índice da tabela
@@ -581,13 +759,9 @@ reset_sonda_direita:
     JMP  ciclo_sonda
     
 colisao_sonda:
-    PUSH R9
     PUSH R10
-    MOV  R10, N_ASTEROIDES  
-    MOV  R9, SONDA_CENTRAL     
-    CMP  R11, R9                     ; verifica se é a sonda central
-    JZ colisao_sonda_central      
-    JMP colisao_sondas_diagonais 
+    MOV  R10, N_ASTEROIDES    
+    JMP verifica_colisao_sonda 
 
 verifica_movimento_sonda:
     MOV  R9, 8                      ; índice do limite da sonda
@@ -604,55 +778,7 @@ verifica_movimento_sonda:
     CALL escreve_pixel
     JMP  ciclo_sonda
  
-
-colisao_sonda_central:
-    PUSH R0
-    PUSH R1
-    PUSH R3
-    PUSH R5
-    PUSH R6
-    SUB  R10, 1                      ; subtrai 1 ao nº de asteróides
-    MOV  R6, TAB_ASTEROIDE    
-    MOV  R0, 12      
-    MUL  R0, R10                    ; multiplica pelo tamanho da tabela
-    ADD  R0, 2
-    MOV  R3, [R6+R0]                ; copia direção do asteróide
-    CMP  R3, 0                      ; verifica se é o asteróide central
-    JNZ  colisao_central_impossivel
-    MOV  R5, [R8+2]                 ; acede à linha da sonda
-    ADD  R0, 2
-    MOV  R3, [R6+R0]                ; acede à linha do asteróide
-    ADD  R3, ASTEROIDE_LARGURA      ; soma largura do asteróide
-    SUB  R5, R3                     ; zero se houver colisão
-    ADD  R5, 1                      ; pixel fronteira entre sonda e asteróide
-    MOV  R3, [COLISAO_SONDA]        ; copia resultado da colisão
-    MOV  [COLISAO_SONDA], R5        ; guarda resultado da colisão
-    MOV  R1, COLISAO_ASTEROIDE
-    MOV  R0, 2
-    MUL  R10, R0                    ; índice do asteróide na tab de colisão
-    MOV  [R1+R10], R5               ; guarda resultado da colisão na tabela
-    DIV  R10, R0                    ; obtém número de instância do asteróide
-    CMP  R5, 1                      ; verifica se houve colisão
-    JZ   ciclo_sonda_fim            ; se houve, não continua
-    CMP  R10, 0                     ; verifica se é o último asteróide
-    POP  R6
-    POP  R5
-    POP  R3
-    POP  R1
-    POP  R0
-    JNZ  colisao_sonda_central      ; se não for, continua
-
-colisao_central_impossivel:
-    POP  R6
-    POP  R5
-    POP  R3
-    POP  R1
-    POP  R0
-    CMP  R10, 0                     ; verifica se é o último asteróide
-    JZ   ciclo_sonda_fim
-    JMP  colisao_sonda_central
-  
-colisao_sondas_diagonais:
+verifica_colisao_sonda:
     PUSH R0
     PUSH R1
     PUSH R3
@@ -666,7 +792,7 @@ colisao_sondas_diagonais:
     MOV  R5, [R0+R11]                ; copia coluna da sonda
     SUB  R11, 4                      ; coloca R11 no valor inicial
     CMP  R10, 0                      ; verifica se é o último asteróide
-    JNZ  verifica_asteroides         ; verifica colisão com asteróides, um a um
+    JGE  verifica_colisao_ast        ; verifica colisão com asteróides, um a um
     POP  R6
     POP  R5
     POP  R3
@@ -674,7 +800,7 @@ colisao_sondas_diagonais:
     POP  R0
     JMP  ciclo_sonda_fim
 
-verifica_asteroides:
+verifica_colisao_ast:
     PUSH R4
     MOV  R6, TAB_ASTEROIDE    
     MOV  R4, 12      
@@ -684,33 +810,31 @@ verifica_asteroides:
     ADD  R4, 2                      ; índice da coluna do asteróide
     MOV  R1, [R6+R4]                ; copia coluna do asteróide
     POP  R4
-    JMP  verifica_limite_esquerdo  
 
 verifica_limite_esquerdo:
-    PUSH R1
-    SUB  R1, 1                      ; subtrai 1 à coluna do asteróide
-    CMP  R5, R1                     ; verifica se colisão é possível
-    POP  R1
+    CMP  R5, R1                 ; comparar coluna da sonda com a do asteróide
     JGE  verifica_limite_direito
-    JMP  colisao_impossivel
+    JMP  colisao_impossivel     ; se coluna da sonda for inferior à do asteróide
 
 verifica_limite_direito:
     PUSH R1
-    ADD  R1, 1                      ; adiciona 1 à coluna da sonda
-    ADD  R1, ASTEROIDE_LARGURA      ; soma largura do asteróide
-    CMP  R5, R1                     ; verifica se colisão é possível
+    ADD  R1, ASTEROIDE_LARGURA  ; soma largura do asteróidesonda
+    SUB  R1, 1                  ; define limite direito do asteróide
+    CMP  R5, R1                 ; comparar coluna da sonda com a do asteróide
     POP  R1
     JLE  verifica_limite_superior
-    JMP  colisao_impossivel
+    JMP  colisao_impossivel     ; se coluna da sonda for superior à do asteróide
+
 
 verifica_limite_superior:
-    CMP  R3, R0                     ; verifica se linha da sonda é inferior
+    CMP  R3, R0                     ; verifica se linha da sonda é superior
     JGT  verifica_limite_inferior   ; à linha do topo do asteróide
     JMP  colisao_impossivel
 
 verifica_limite_inferior:
     PUSH R0
     ADD  R0, ASTEROIDE_LARGURA      ; soma altura do asteróide (= largura)
+    SUB  R0, 1                      ; define limite inferior do asteróide
     CMP  R3, R0                     ; verifica se linha da sonda é superior
     POP  R0                         ; à linha da base do asteróide
     JLE  gere_colisao               ; sonda colidiu com asteróide
@@ -738,11 +862,10 @@ colisao_impossivel:
     POP  R3
     POP  R1
     POP  R0
-    JMP  colisao_sondas_diagonais
+    JMP  verifica_colisao_sonda
 
 ciclo_sonda_fim:
     POP  R10
-    POP  R9
     JMP  verifica_movimento_sonda
 
 ; Processo
@@ -781,6 +904,8 @@ gera_col_dir_inicio:
     SUB  R0, 4                    ; atualiza índice da tabela para coluna
     MOV  R1, [R10+R0]             ; copia coluna gerada aleatoriamente
     MOV  [R2+6], R1               ; atualiza a coluna do asteróide
+    MOV  R1, 0                    ; reset linha referência do asteróide
+    MOV  [R2+4], R1               ; atualiza a linha do asteróide
     ADD  R0, 2                    ; atualiza índice da tabela para direção
     MOV  R1, [R10+R0]             ; copia direção gerada aleatoriamente
     MOV  [R2+2], R1               ; atualiza a direção do asteróide 
@@ -838,22 +963,28 @@ reinicia_estado_colisão:
     POP R1
 
 seleciona_tipo:
-    MOV  [R2], R1                ; atualiza o tipo do asteróide
-    CMP  R1, 1                   ; verifica se o asteróide é minerável
-    MOV  R4, DEF_MINERAVEL       ; endereço da tabela que define mineráveis
+    MOV  [R2], R1                  ; atualiza o tipo do asteróide
+    CMP  R1, 1                     ; verifica se o asteróide é minerável
+    MOV  R4, DEF_MINERAVEL         ; endereço da tabela que define mineráveis
     JZ   ciclo_mineravel 
-    MOV  R4, DEF_ASTEROIDE       ; endereço da tabela que define asteroides   
+    MOV  R4, DEF_ASTEROIDE         ; endereço da tabela que define asteroides   
 
 ciclo_asteroide:
-    MOV  R5, [R2+2]               ; acede à posição da direção na tabela   
-    MOV  R6, [R2+4]               ; acede à posição da linha na tabela
-    MOV  R7, [R2+6]               ; acede à posição da coluna na tabela
+    MOV  R5, [R2+2]                ; acede à posição da direção na tabela   
+    MOV  R6, [R2+4]                ; acede à posição da linha na tabela
+    MOV  R7, [R2+6]                ; acede à posição da coluna na tabela
     CALL verifica_colisao
     CMP  R3, 0
-    JZ   colisao_nave
-    MOV  R3, [R2]                 ; copia tipo de asteróide
+    JZ   gameover_nave
+    MOV  R3, [R2]                    ; copia tipo de asteróide
     CALL desenha_asteroide
-    MOV  R0, [evento_int_asteroides]   ; lê o LOCK desta instância do asteróide
+    MOV  R0, [evento_int_asteroides] ; lê o LOCK desta instância do asteróide
+    PUSH R1
+    MOV  R1, [MODO_JOGO]             ; lê o modo de jogo
+    CMP  R1, REINICIAR               ; verifica se jogo está a ser reiniciado
+    POP  R1
+    JZ   reinicia_ast                ; se sim, reinicia o processo asteróide
+    CALL controlo
     CALL move_asteroide
     JMP  ciclo_asteroide
 
@@ -863,11 +994,24 @@ ciclo_mineravel:
     MOV  R7, [R2+6]               ; acede à posição da coluna na tabela
     CALL verifica_colisao
     CMP  R3, 0
-    JZ   colisao_nave
+    JZ   gameover_nave
     MOV  R3, [R2]                 ; copia tipo de asteróide
     CALL desenha_asteroide
     MOV  R0, [evento_int_asteroides]   ; lê o LOCK desta instância do asteróide
+    PUSH R1
+    MOV  R1, [MODO_JOGO]         ; lê o modo de jogo
+    CMP  R1, REINICIAR           ; verifica se jogo está a ser reiniciado
+    POP  R1
+    JZ   reinicia_ast            ; se sim, reinicia o processo asteróide
+    CALL controlo
     JMP move_asteroide
+
+reinicia_ast:
+    YIELD
+    MOV R1, [MODO_JOGO]          ; lê o modo de jogo
+    CMP R1, JOGAVEL              ; verifica se jogo está a decorrer de novo
+    JZ  gera_col_dir_inicio      ; se sim, reinicia o processo asteróide
+    JMP reinicia_ast
 
 verifica_colisao:
     PUSH R6
@@ -890,8 +1034,9 @@ verifica_colisao:
     POP  R6
     RET
 
-colisao_nave:
-    JMP colisao_nave
+gameover_nave: 
+    MOV R2, 5                  ; seleciona fundo número 5       
+    JMP fim_jogo
 
 ;==============================================================================
 ; MOVE_ASTEROIDE - Desce o asteróide diagonalmente, em direção à nave.
