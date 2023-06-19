@@ -8,4 +8,4 @@ By:
 
 - Patrícia Gameiro - ist1107245
 
-Report: [Click here to open PDF](https://drive.google.com/file/d/1jzDPROPHjSIFWx934E6AdpxM59qKw6Oo/view?usp=sharing)
+Report: [Beyond Mars](https://drive.google.com/file/d/1jzDPROPHjSIFWx934E6AdpxM59qKw6Oo/view?usp=sharing)
